@@ -10,6 +10,9 @@ class Evolution(nn.Module):
         super(Evolution, self).__init__()
 
         self.fuse = nn.Conv1d(128, 64, 1)
+
+
+        #1 init,(1+2) evolve，snake参数不共享
         self.init_gcn = Snake(state_dim=128, feature_dim=64+2, conv_type='dgrid')
         self.evolve_gcn = Snake(state_dim=128, feature_dim=64+2, conv_type='dgrid')
         self.iter = 2
@@ -36,6 +39,10 @@ class Evolution(nn.Module):
         return evolve
 
     def prepare_testing_init(self, output):
+
+
+        #output['detection'][..., :4] h w x y
+        #output['detection'][..., 4] score
         init = snake_gcn_utils.prepare_testing_init(output['detection'][..., :4], output['detection'][..., 4])
         output['detection'] = output['detection'][output['detection'][..., 4] > snake_config.ct_score]
         output.update({'it_ex': init['i_it_4py']})
@@ -55,14 +62,26 @@ class Evolution(nn.Module):
 
         h, w = cnn_feature.size(2), cnn_feature.size(3)
         init_feature = snake_gcn_utils.get_gcn_feature(cnn_feature, i_it_poly, ind, h, w)
+
+        #左上角+右上角/2 得到中心坐标
+        #i_it_poly.shape=(num_batch,points,2)
+        #torch.min(i_it_poly, dim=1)[0]->values
+        #torch.min(i_it_poly, dim=1)[0].shape=(num_batch,2)
+        #torch.min(i_it_poly, dim=1)[1]->indices
         center = (torch.min(i_it_poly, dim=1)[0] + torch.max(i_it_poly, dim=1)[0]) * 0.5
         ct_feature = snake_gcn_utils.get_gcn_feature(cnn_feature, center[:, None], ind, h, w)
+
+
+        #让每一个轮廓上的点既包含自身特征也包含图形中心特征
         init_feature = torch.cat([init_feature, ct_feature.expand_as(init_feature)], dim=1)
         init_feature = self.fuse(init_feature)
 
         init_input = torch.cat([init_feature, c_it_poly.permute(0, 2, 1)], dim=1)
         adj = snake_gcn_utils.get_adj_ind(snake_config.adj_num, init_input.size(2), init_input.device)
+
+        #算出偏移量加上到输入调整
         i_poly = i_it_poly + snake(init_input, adj).permute(0, 2, 1)
+        #隔::snake_config.init_poly_num//4个原素取值
         i_poly = i_poly[:, ::snake_config.init_poly_num//4]
 
         return i_poly

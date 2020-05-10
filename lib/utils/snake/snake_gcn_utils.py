@@ -30,10 +30,24 @@ def prepare_testing_init(box, score):
     i_it_4pys = uniform_upsample(i_it_4pys, snake_config.init_poly_num)
     c_it_4pys = img_poly_to_can_poly(i_it_4pys)
 
+
+    #ind=[batch][t,f,t,f...]
     ind = score > snake_config.ct_score
+
+
     i_it_4pys = i_it_4pys[ind]
     c_it_4pys = c_it_4pys[ind]
+    
+    #torch.full([ind[i].sum()], i)->[i,i...i] 长度为这张图片score > snake_config.ct_score的个数
+
+    # ind=    [0,0,0...,0]
+    #         [1,1,1...,1]
+    #         [2,2,2...,2]
+    #         [3,3,3...,3]
+    #ind[n]为第n张图片的...
     ind = torch.cat([torch.full([ind[i].sum()], i) for i in range(ind.size(0))], dim=0)
+
+
     init = {'i_it_4py': i_it_4pys, 'c_it_4py': c_it_4pys, 'ind': ind}
 
     return init
@@ -162,6 +176,11 @@ def get_gcn_feature(cnn_feature, img_poly, ind, h, w):
 
     batch_size = cnn_feature.size(0)
     gcn_feature = torch.zeros([img_poly.size(0), cnn_feature.size(1), img_poly.size(1)]).to(img_poly.device)
+
+
+
+    #cnn_feature[i:i+1].shape=(1,C,H,W)
+    #poly.shape==(1,1,W,2)
     for i in range(batch_size):
         poly = img_poly[ind == i].unsqueeze(0)
         feature = torch.nn.functional.grid_sample(cnn_feature[i:i+1], poly)[0].permute(1, 0, 2)

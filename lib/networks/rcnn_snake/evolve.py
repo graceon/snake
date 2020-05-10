@@ -63,8 +63,13 @@ class Evolution(nn.Module):
 
         h, w = cnn_feature.size(2), cnn_feature.size(3)
         init_feature = snake_gcn_utils.get_gcn_feature(cnn_feature, i_it_poly, ind, h, w)
+
+
         center = (torch.min(i_it_poly, dim=1)[0] + torch.max(i_it_poly, dim=1)[0]) * 0.5
+
         ct_feature = snake_gcn_utils.get_gcn_feature(cnn_feature, center[:, None], ind, h, w)
+        
+        
         init_feature = torch.cat([init_feature, ct_feature.expand_as(init_feature)], dim=1)
         init_feature = self.fuse(init_feature)
 
